@@ -1,0 +1,5 @@
+# Install PyTorch for your GPU first: https://pytorch.org/get-started/locally/
+torch
+numpy
+datasets
+tiktoken
