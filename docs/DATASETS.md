@@ -2,7 +2,7 @@
 
 The assignment asks us to "collect various English sentence datasets" and find them ourselves.
 We use three public English corpora from the Hugging Face Hub, all tokenized with the GPT-2 BPE
-(`tiktoken`, vocabulary of 50,257 tokens) by `scripts/prepare_data.py`.
+(`tiktoken`, vocabulary of 50,257 tokens) by `prepare.py`.
 
 | Name | Source | Train tokens | Val tokens | Test tokens | Role |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -23,7 +23,7 @@ TinyStories ≈ 914 MB of uint16 tokens. `data/` is git-ignored, so each teammat
   notes that small models are "only suitable for a simpler language"; TinyStories lets us test
   whether growth timing behaves differently on simple text, where a small model learns a lot
   quickly, compared with encyclopedic text.
-  It has no test split, so `prepare_data.py` halves the official validation split into val/test.
+  It has no test split, so `prepare.py` halves the official validation split into val/test.
 - **WikiText-2** has the same distribution as WikiText-103 at about 2% of the size, so it suits
   quick end-to-end checks.
 
@@ -32,7 +32,7 @@ TinyStories ≈ 914 MB of uint16 tokens. `data/` is git-ignored, so each teammat
 - WikiText rows are lines of an article stream; each split is tokenized as one contiguous text.
 - TinyStories rows are separate stories; an `<|endoftext|>` token is appended after each one.
 - Validation and test loss are computed on fixed, non-overlapping windows from the start of the
-  split (`TokenDataset.eval_batches` in `dataloader.py`), so every run is scored on exactly the same tokens.
+  split (`Data.eval_batches` in `data.py`), so every run is scored on exactly the same tokens.
 
 ## Citations (for the report)
 

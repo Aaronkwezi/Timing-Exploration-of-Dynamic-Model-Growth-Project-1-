@@ -1,5 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
-# generated token files (regenerate with scripts/prepare_data.py)
+# generated: rebuild with python prepare.py / python train.py
 data/
+runs/
+results/

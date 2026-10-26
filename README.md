@@ -1,71 +1,42 @@
-# Timing Exploration of Dynamic Model Growth (Project 1)
+# Timing Exploration of Dynamic Model Growth
 
-Datasets for the project: English text corpora downloaded from the Hugging Face Hub and tokenized
-with the GPT-2 BPE into flat `uint16` token files, plus a small loader that serves `(x, y)` batches
-to any PyTorch language model. See [docs/DATASETS.md](docs/DATASETS.md) for sizes, the reasons
-these corpora were picked, and citations.
+Train a small Transformer, grow it into a large one partway through, and see when that saves
+training compute. Everything except the model idea is already set up.
 
-## The project in brief
-
-Train a small Transformer M0 (dimension d0) and a large one M1 (d1 > d0) from scratch. Then
-initialize a large model M1' from a partly trained M0 after some number of epochs and keep
-training it, and find out when that switch saves training cost. Compare training cost (TFLOPs)
-against accuracy (validation loss / test error) across different growth timings and deepening
-methods.
-
-Deliverables: an IEEE-proceedings-format report (at least 5 two-column letter pages, at least 10
-references; abstract, introduction, related work, method, implementation, testbed, metrics,
-results), plus the source code and dataset.
-
-## Repository layout
+## Setup (once)
 
 ```
-dataloader.py            TokenDataset: batches from the prepared token files
-scripts/prepare_data.py  download + tokenize a dataset into data/<name>/
-scripts/check_setup.py   verify PyTorch/CUDA and every prepared dataset
-docs/DATASETS.md         dataset choices, sizes, preprocessing, citations
-data/                    generated token files (git-ignored)
+pip install -r requirements.txt     # install PyTorch for your GPU first: pytorch.org/get-started/locally
+python prepare.py                   # downloads + tokenizes the datasets (~1 GB)
 ```
 
-## Working on it
+## Run things
 
-`main` is only the shared starting point. Do each area of work on its own branch (for example
-`git checkout -b small-model` or `git checkout -b growth-timing`) and merge back through a pull
-request.
-
-## Setup
-
-```bash
-python -m venv .venv            # add --system-site-packages to reuse an existing CUDA PyTorch
-.venv/Scripts/activate          # Windows; use `source .venv/bin/activate` on Linux/macOS
-pip install -r requirements.txt
+```
+python train.py                                               # small model, 2000 steps
+python train.py --model large                                 # sizes: tiny mini small medium large
+python train.py --model small --then large --switch-at 1000   # grow small -> large at step 1000
+python train.py --model my_model.py                           # test your own architecture
+python plot.py                                                # compare all runs -> results/compare.png
 ```
 
-## Build the datasets
+Add `--data wikitext2 --steps 200` to any run for a quick test (about 40 seconds).
+Other options: `--data tinystories`, `--steps N`, `--name`. Run `python train.py -h` for the list.
 
-`data/` is git-ignored, so each person generates it locally:
+## Where you work
 
-```bash
-python scripts/prepare_data.py wikitext2      # ~2.4M train tokens, fast; for quick checks
-python scripts/prepare_data.py wikitext103    # ~118M train tokens, ~226 MB; main dataset
-python scripts/prepare_data.py tinystories    # ~474M train tokens, ~914 MB; simple English
-```
+- **`grow.py`**: write how the small model initializes the large one. This is the research part.
+- **`model.py`**: the default model and the sizes. To try a new architecture, make a `.py` file with
+  `build(vocab_size, block_size)` returning a torch module (instructions at the top of `model.py`).
 
-Each produces `data/<name>/{train,val,test}.bin` and `meta.json` (token counts, tokenizer, vocab
-size 50,257). Pass `--max-train-tokens N` to write a truncated train split. Then check everything with:
+## What you get
 
-```bash
-python scripts/check_setup.py
-```
+Every run is saved in `runs/<name>/` (`log.csv`, `summary.json`). Cost is the TFLOPs spent so far,
+measured automatically (including the jump in cost when the model grows), so any two runs can be
+compared with `python plot.py`. Its table has a "val loss @ same cost" column: the fair comparison.
 
-## Use with a model
+Datasets (details and citations in [docs/DATASETS.md](docs/DATASETS.md)): `wikitext103` (default),
+`tinystories`, `wikitext2` (tiny, for tests).
 
-```python
-from dataloader import TokenDataset
-
-ds = TokenDataset("wikitext103")
-vocab_size = ds.meta["vocab_size"]                     # 50257 (GPT-2 BPE)
-x, y = ds.get_batch("train", 16, 256, "cuda")          # random windows, y = x shifted by 1
-for x, y in ds.eval_batches("val", 16, 256, "cuda", max_batches=40):
-    ...                                                # fixed windows: same tokens every run
-```
+`data.py`, `prepare.py`, `train.py` and `plot.py` are plumbing; you shouldn't need to edit them.
+Do each experiment on its own git branch.
