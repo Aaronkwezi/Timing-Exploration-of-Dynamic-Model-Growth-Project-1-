@@ -20,7 +20,7 @@ for f in sorted((root / "runs").glob("*/log.csv")):
     if rows:
         runs[f.parent.name] = rows
 if not runs:
-    raise SystemExit("No runs yet. Try:  python train.py --data wikitext2 --steps 200")
+    raise SystemExit("No runs yet. Try:  python train.py --steps 200")
 
 fig, ax = plt.subplots(figsize=(8, 5))
 curves = {}

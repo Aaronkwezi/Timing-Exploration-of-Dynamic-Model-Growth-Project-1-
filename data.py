@@ -1,19 +1,18 @@
 """Batches of text for training. train.py uses this; you shouldn't need to touch it."""
-import json
 from pathlib import Path
 
 import numpy as np
 import torch
 
+VOCAB_SIZE = 50257  # GPT-2 tokenizer
+
 
 class Data:
-    def __init__(self, name):
-        d = Path(__file__).parent / "data" / name
-        if not (d / "meta.json").exists():
-            raise SystemExit(f"Dataset '{name}' isn't built yet. Run:  python prepare.py {name}")
-        self.vocab_size = json.loads((d / "meta.json").read_text())["vocab_size"]
+    def __init__(self):
+        d = Path(__file__).parent / "data" / "wikitext103"
+        if not (d / "test.bin").exists():
+            raise SystemExit("Dataset isn't built yet. Run:  python prepare.py")
         self.split = {s: np.memmap(d / f"{s}.bin", dtype=np.uint16, mode="r") for s in ("train", "val", "test")}
-        self.train_tokens = len(self.split["train"])
 
     def _xy(self, data, starts, T, device):
         w = torch.stack([torch.from_numpy(data[i:i + T + 1].astype(np.int64)) for i in starts])
