@@ -1,15 +1,15 @@
 """Train a model and record its loss against compute cost (TFLOPs).
 
-    python train.py                                              # small model, WikiText-103, 2000 steps
-    python train.py --model large                                # a size: tiny mini small medium large
-    python train.py --model my_model.py                          # your own architecture (see model.py)
-    python train.py --model small --then large --switch-at 1000  # grow small -> large at step 1000 (see grow.py)
-    python train.py --data wikitext2 --steps 200                 # quick test
+    python train.py                                                      # model.py, 2000 steps
+    python train.py --model small.py                                     # any model file (see model.py)
+    python train.py --model small.py --then large.py --switch-at 1000    # grow small -> large at step 1000 (see grow.py)
+    python train.py --steps 200                                  # quick test
 
 Results land in runs/<name>/. Compare runs with:  python plot.py
 """
 import argparse
 import csv
+import importlib.util
 import json
 import logging
 import math
@@ -22,9 +22,8 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 logging.getLogger("torch.utils.flop_counter").setLevel(logging.ERROR)  # harmless "triton not found" notice
 from torch.utils.flop_counter import FlopCounterMode  # noqa: E402
 
-from data import Data  # noqa: E402
+from data import VOCAB_SIZE, Data  # noqa: E402
 from grow import grow  # noqa: E402
-from model import build  # noqa: E402
 
 # Same for every run so results are comparable. Change here if you must.
 SEQ_LEN, BATCH, ACCUM = 256, 16, 2        # 8,192 tokens per step
@@ -32,10 +31,9 @@ LR, MIN_LR, WARMUP, REWARM = 6e-4, 6e-5, 200, 100   # REWARM: LR warm-up steps a
 EVAL_EVERY, EVAL_BATCHES = 100, 40
 
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-ap.add_argument("--model", default="small", help="size name or path to a .py file")
-ap.add_argument("--then", help="grow into this model at --switch-at (size name or .py file)")
+ap.add_argument("--model", default="model.py", help="path to a .py file defining build(vocab_size, block_size)")
+ap.add_argument("--then", help="grow into this model file at --switch-at")
 ap.add_argument("--switch-at", type=int, help="step at which to grow (needs --then)")
-ap.add_argument("--data", default="wikitext103", help="wikitext2 | wikitext103 | tinystories")
 ap.add_argument("--steps", type=int, default=2000)
 ap.add_argument("--name", help="run name (default: made from the options)")
 args = ap.parse_args()
@@ -43,7 +41,7 @@ if bool(args.then) != (args.switch_at is not None):
     ap.error("--then and --switch-at go together")
 
 name = args.name or (f"{Path(args.model).stem}" + (f"-to-{Path(args.then).stem}@{args.switch_at}" if args.then else "")
-                     + f"_{args.data}_{args.steps}")
+                     + f"_{args.steps}")
 run_dir = Path(__file__).parent / "runs" / name
 run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -51,12 +49,19 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 amp = torch.autocast(device, dtype=torch.bfloat16, enabled=device == "cuda")
 torch.manual_seed(1337)
 gen = torch.Generator().manual_seed(1337)
-data = Data(args.data)
+data = Data()
+
+
+def build(path, vocab_size, block_size):
+    spec = importlib.util.spec_from_file_location(Path(path).stem, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.build(vocab_size, block_size)
 
 
 def flops_per_token(model):
     """Measured (not estimated): FLOPs of one forward+backward pass, per token. Works for any model."""
-    x = torch.randint(0, data.vocab_size, (1, SEQ_LEN), device=device)
+    x = torch.randint(0, VOCAB_SIZE, (1, SEQ_LEN), device=device)
     with sdpa_kernel(SDPBackend.MATH), FlopCounterMode(display=False) as fc:
         model(x, x)[1].backward()
     model.zero_grad(set_to_none=True)
@@ -94,7 +99,7 @@ def lr_at(step, last_switch):
     return lr
 
 
-model = build(args.model, data.vocab_size, SEQ_LEN).to(device)
+model = build(args.model, VOCAB_SIZE, SEQ_LEN).to(device)
 opt, fpt = make_optimizer(model), flops_per_token(model)
 tokens = tflops = 0.0
 last_switch, recent, t0 = None, [], time.time()
@@ -114,7 +119,7 @@ for step in range(args.steps + 1):
 
     if args.then and step == args.switch_at:
         before = evaluate(model, "val")
-        model = grow(model, build(args.then, data.vocab_size, SEQ_LEN).to(device)).to(device)
+        model = grow(model, build(args.then, VOCAB_SIZE, SEQ_LEN).to(device)).to(device)
         opt, fpt, last_switch = make_optimizer(model), flops_per_token(model), step
         after = evaluate(model, "val")
         log.writerow([step, int(tokens), round(tflops, 4), "", round(after, 4), f"grown (val before: {before:.4f})"])
