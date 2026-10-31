@@ -14,13 +14,18 @@ print("Test characters: ", len(test_text))
 print(train_text[:500])
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
-train_tokens = tokenizer.encode(train_text)
-val_tokens = tokenizer.encode(val_text)
-test_tokens = tokenizer.encode(test_text)
-print(train_tokens[:20])
-train_data = torch.tensor(train_tokens, dtype=torch.long)
-val_data = torch.tensor(val_tokens, dtype=torch.long)
-test_data = torch.tensor(test_tokens, dtype=torch.long)
+
+def tokenize_split(split):
+    tokens = []
+    for row in dataset[split]:
+        text = row["text"] + "\n"
+        tokens.extend(tokenizer.encode(text, add_special_tokens=False))
+    return torch.tensor(tokens, dtype=torch.long)
+
+
+train_data = tokenize_split("train")
+val_data = tokenize_split("validation")
+test_data = tokenize_split("test")
 
 torch.save(train_data, "train.pt")
 torch.save(val_data,"val.pt")
