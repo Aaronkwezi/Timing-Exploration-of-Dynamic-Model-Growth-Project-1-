@@ -2,5 +2,5 @@
 torch
 numpy
 datasets
-tiktoken
+transformers
 matplotlib
