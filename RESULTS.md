@@ -15,6 +15,7 @@ was always better than growing later.
 - Growth: copy each small weight into the top-left corner of the large one (not function-preserving).
 - Cost = 6 x parameters x tokens. Val loss = mean of the same 20 validation batches in every run.
 - One seed per run, CPU only (1 thread), about 30 minutes per run.
+- Raw numbers: `results_<run>.csv` (step, tflops, val_loss every 100 steps), as written by `train.py`.
 
 ## Validation loss at the same cost
 
