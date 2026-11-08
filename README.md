@@ -1,38 +1,43 @@
 # Timing Exploration of Dynamic Model Growth
 
 Train a small Transformer, grow it into a large one partway through, and see when that saves
-training compute. Data, training, cost measurement and plotting are set up; the models and the growth method are yours to write.
+training compute. Runs are compared by validation loss at the same cost (TFLOPs).
 
 ## Setup (once)
 
 ```
 pip install -r requirements.txt     # install PyTorch for your GPU first: pytorch.org/get-started/locally
-python prepare.py                   # downloads + tokenizes WikiText-103 (~230 MB)
+python src/prepare.py               # only if train.pt / val.pt / test.pt are missing
 ```
+
+`prepare.py` tokenizes WikiText-2 with the GPT-2 tokenizer and writes `train.pt`, `val.pt` and
+`test.pt` to the current folder. These files are already in the repo.
 
 ## Run things
 
+Run from the repo folder, so `data.py` can find the `.pt` files:
+
 ```
-python train.py                                               # model.py, 2000 steps
-python train.py --model small.py --then large.py --switch-at 1000   # grow at step 1000
-python plot.py                                                # compare all runs -> results/compare.png
+python src/train.py small          # small model the whole time (2000 steps)
+python src/train.py large          # large model the whole time
+python src/train.py grow 1000      # small model, grown into the large one at step 1000
 ```
 
-Add `--steps 200` to any run for a quick test. Other options: `--name`. Run `python train.py -h` for the list.
+Each run writes `results_<name>.csv` (`step, tflops, val_loss`), e.g. `results_grow1000.csv`.
+Validation loss is measured every 100 steps on the same 20 validation batches in every run.
 
-## Where you work
+## Files
 
-- **`grow.py`**: write how the small model initializes the large one. This is the research part.
-- **`model.py`**: write the model. Any `.py` file with `build(vocab_size, block_size)` returning a torch
-  module works (contract at the top of `model.py`); write a second one for the large model.
+- `src/model.py`: the Transformer. Small = 64 wide, 2 heads, 2 layers; large = 128 wide, 4 heads, 4 layers.
+- `src/growth.py`: `grow(small, large)` copies each small weight into the top-left corner of the
+  matching large weight; extra width and extra layers keep their random start.
+- `src/train.py`: training (AdamW, lr 3e-4, fresh optimizer after growing).
+- `src/data.py`: loads the token files and draws random batches (16 sequences of 64 tokens).
+- `src/prepare.py`: builds the token files.
 
-## What you get
+## Notes
 
-Every run is saved in `runs/<name>/` (`log.csv`, `summary.json`). Cost is the TFLOPs spent so far,
-measured automatically (including the jump in cost when the model grows), so any two runs can be
-compared with `python plot.py`. Its table has a "val loss @ same cost" column: the fair comparison.
+- Cost is estimated as 6 x parameters x tokens per step, so it includes the jump when the model grows.
+- The corner copy does not keep the model's output the same: the loss jumps right after growing.
 
-Dataset: WikiText-103 (details and citations in [docs/DATASETS.md](docs/DATASETS.md)).
-
-`data.py`, `prepare.py`, `train.py` and `plot.py` are plumbing; you shouldn't need to edit them.
 Do each experiment on its own git branch.
