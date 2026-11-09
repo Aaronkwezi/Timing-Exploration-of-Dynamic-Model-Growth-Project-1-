@@ -12,7 +12,12 @@ from growth import grow
 
 steps = 2000
 mode = sys.argv[1]
-switch_at = int(sys.argv[2]) if mode == "grow" else -1
+if mode not in ["small", "large", "grow"]:
+    raise ValueError("mode must be small, large, or grow")
+if mode == 'grow':
+    switch_at = int(sys.argv[2])
+else:
+    switch_at = -1
 
 def small_model():
     return Transformer(vocab_size=50257, n_embd=64, block_size=64, n_heads=2, n_layers=2)
@@ -33,9 +38,16 @@ def val_loss(model):
 
 # The same 20 validation batches for every run, so runs can be compared.
 torch.manual_seed(0)
-val_batches = [get_batch(val_data) for _ in range(20)]
+val_batches = []
+for i in range(20):
+    batch = get_batch(val_data)
+    val_batches.append(batch)
 
-model = large_model() if mode == "large" else small_model()
+if mode == "large" :
+    model = large_model()
+else:
+    model = small_model()
+
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 
 # Cost: training one token costs about 6 FLOPs per parameter (2 forward, 4 backward).
@@ -48,6 +60,8 @@ out.write("step,tflops,val_loss\n")
 
 for step in range(steps + 1):
     if step == switch_at:
+        before_loss = val_loss(model)
+        print(f"step {step}: growing from small to large model, val loss before growth {before_loss:.3f}")
         model = grow(model, large_model())
         optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
         print(f"step {step}: grew into the large model")

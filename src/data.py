@@ -19,6 +19,3 @@ def get_eval_batch(data, batch_index):
     y = torch.stack([data[i + 1:i + block_size + 1] for i in range(start,start + batch_size * batch_size,block_size)])
     return x, y
 
-x, y = get_batch(train_data)
-print("Input shape:",x.shape)
-print("Target shape:",y.shape)
